@@ -6,72 +6,167 @@ namespace ZapretDesktop.Core.Services;
 public class PresetManager
 {
     private readonly string _presetsFilePath;
+    private readonly string _statsFilePath;
 
     public PresetManager(string? customPath = null)
     {
-        string dir = customPath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config");
+        string dir = customPath ?? AppPaths.ConfigDir;
         Directory.CreateDirectory(dir);
         _presetsFilePath = Path.Combine(dir, "presets.json");
+        _statsFilePath = Path.Combine(dir, "presets_stats.json");
     }
 
-    public List<Preset> GetDefaultPresets()
-    {
-        return new List<Preset>
-        {
-            new()
-            {
-                Id = "discord-youtube-general",
-                Name = "Discord + YouTube (General)",
-                Description = "Универсальный стратег под Discord (Voice + Media) и 4K YouTube",
-                Category = "Universal",
-                Arguments = "--wf-tcp=80,443 --wf-udp=443,50000-65535 --dpi-desync=fake,split2 --dpi-desync-repeats=6 --dpi-desync-fooling=md5sig",
-                IsBuiltIn = true
-            },
-            new()
-            {
-                Id = "youtube-alt",
-                Name = "YouTube Alt (Fake TLS)",
-                Description = "Обход замедления YouTube через подмену TLS ClientHello",
-                Category = "YouTube",
-                Arguments = "--wf-tcp=80,443 --wf-udp=443 --dpi-desync=fake --dpi-desync-fake-tls=\"bin/tls_clienthello_www_google_com.bin\"",
-                IsBuiltIn = true
-            },
-            new()
-            {
-                Id = "telegram-speedup",
-                Name = "Telegram Speedup & Voice",
-                Description = "Ускорение медиапотоков и голосовых вызовов Telegram",
-                Category = "Telegram",
-                Arguments = "--wf-tcp=80,443 --wf-udp=443,1400,5222 --dpi-desync=fake,disorder2",
-                IsBuiltIn = true
-            }
-        };
-    }
+    public List<Preset> GetDefaultPresets() => StrategyCatalog.GetDefaults();
 
     public async Task<List<Preset>> LoadPresetsAsync()
     {
+        List<Preset> presets;
+
         if (!File.Exists(_presetsFilePath))
         {
-            var defaults = GetDefaultPresets();
-            await SavePresetsAsync(defaults);
-            return defaults;
+            presets = GetDefaultPresets();
+            await SavePresetsAsync(presets);
+        }
+        else
+        {
+            try
+            {
+                string json = await File.ReadAllTextAsync(_presetsFilePath);
+                presets = JsonSerializer.Deserialize<List<Preset>>(json) ?? GetDefaultPresets();
+            }
+            catch
+            {
+                presets = GetDefaultPresets();
+            }
         }
 
-        try
+        // Статистику загружаем до сохранения, чтобы не затереть её нулями.
+        await LoadStatsAsync(presets);
+
+        // Обновляем встроенные стратегии до актуальных версий и добавляем новые.
+        var builtIn = GetDefaultPresets();
+        var builtInIds = builtIn.Select(p => p.Id).ToHashSet();
+
+        presets.RemoveAll(p => p.IsBuiltIn && !builtInIds.Contains(p.Id));
+
+        var changed = false;
+        foreach (var definition in builtIn)
         {
-            string json = await File.ReadAllTextAsync(_presetsFilePath);
-            var presets = JsonSerializer.Deserialize<List<Preset>>(json);
-            return presets ?? GetDefaultPresets();
+            var existing = presets.FirstOrDefault(p => p.Id == definition.Id);
+            if (existing == null)
+            {
+                presets.Add(definition);
+                changed = true;
+                continue;
+            }
+
+            if (existing.Name != definition.Name ||
+                existing.Description != definition.Description ||
+                existing.Category != definition.Category ||
+                existing.Arguments != definition.Arguments)
+            {
+                existing.Name = definition.Name;
+                existing.Description = definition.Description;
+                existing.Category = definition.Category;
+                existing.Arguments = definition.Arguments;
+                existing.IsBuiltIn = true;
+                changed = true;
+            }
         }
-        catch
+
+        if (changed)
         {
-            return GetDefaultPresets();
+            try { await SavePresetsAsync(presets); } catch { /* ignore */ }
         }
+
+        return presets;
     }
 
     public async Task SavePresetsAsync(List<Preset> presets)
     {
         string json = JsonSerializer.Serialize(presets, new JsonSerializerOptions { WriteIndented = true });
         await File.WriteAllTextAsync(_presetsFilePath, json);
+
+        // Сохранить статистику отдельно
+        await SaveStatsAsync(presets);
+    }
+
+    private async Task LoadStatsAsync(List<Preset> presets)
+    {
+        if (!File.Exists(_statsFilePath)) return;
+
+        try
+        {
+            string json = await File.ReadAllTextAsync(_statsFilePath);
+            var stats = JsonSerializer.Deserialize<List<PresetStats>>(json) ?? new List<PresetStats>();
+
+            foreach (var preset in presets)
+            {
+                var stat = stats.FirstOrDefault(s => s.Id == preset.Id);
+                if (stat != null)
+                {
+                    preset.LastUsed = stat.LastUsed;
+                    preset.SuccessCount = stat.SuccessCount;
+                    preset.FailCount = stat.FailCount;
+                }
+            }
+        }
+        catch
+        {
+            // Игнорировать ошибки загрузки статистики
+        }
+    }
+
+    private async Task SaveStatsAsync(List<Preset> presets)
+    {
+        var stats = presets.Select(p => new PresetStats
+        {
+            Id = p.Id,
+            LastUsed = p.LastUsed,
+            SuccessCount = p.SuccessCount,
+            FailCount = p.FailCount
+        }).ToList();
+
+        string json = JsonSerializer.Serialize(stats, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(_statsFilePath, json);
+    }
+
+    public async Task UpdatePresetStatsAsync(string presetId, bool success)
+    {
+        var presets = await LoadPresetsAsync();
+        var preset = presets.FirstOrDefault(p => p.Id == presetId);
+
+        if (preset == null) return;
+
+        if (success)
+            preset.SuccessCount++;
+        else
+            preset.FailCount++;
+
+        preset.LastUsed = DateTime.UtcNow;
+        await SaveStatsAsync(presets);
+    }
+
+    public async Task<List<Preset>> GetPresetsByCategoryAsync(string category)
+    {
+        var presets = await LoadPresetsAsync();
+        return presets.Where(p => p.Category == category).ToList();
+    }
+
+    public async Task<List<Preset>> GetRecommendedPresetsAsync()
+    {
+        var presets = await LoadPresetsAsync();
+        return presets
+            .OrderByDescending(p => p.SuccessRate)
+            .ThenByDescending(p => p.LastUsed)
+            .ToList();
+    }
+
+    private class PresetStats
+    {
+        public string Id { get; set; } = string.Empty;
+        public DateTime LastUsed { get; set; }
+        public int SuccessCount { get; set; }
+        public int FailCount { get; set; }
     }
 }

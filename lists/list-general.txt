@@ -1,4 +1,3 @@
-# DNS-over-HTTPS (DoH)
 dns.google
 dns.quad9.net
 dns.nextdns.io
@@ -7,8 +6,6 @@ doh.cleanbrowsing.org
 freedns.controld.com
 wikimedia-dns.org
 cloudflare-dns.com
-
-# Cloudflare & CDN
 cloudflare-ech.com
 encryptedsni.com
 cloudflareaccess.com
@@ -27,8 +24,6 @@ cloudflarestorage.com
 cloudflarestream.com
 cloudflaretest.com
 cloudfront.net
-
-# Discord
 dis.gd
 discord-attachments-uploads-prd.storage.googleapis.com
 discord.app
@@ -54,8 +49,6 @@ discordsays.com
 discordsez.com
 discordstatus.com
 zendesk.com
-
-# Twitch / Emotes / Media
 frankerfacez.com
 ffzap.com
 betterttv.net
@@ -64,8 +57,6 @@ betterttv.net
 localizeapi.com
 klipy.com
 live-video.net
-
-# YouTube
 youtube.com
 googlevideo.com
 ytimg.com
@@ -74,20 +65,14 @@ youtubei.googleapis.com
 jnn-pa.googleapis.com
 nhacmp3youtube.com
 yt.be
-
-# Telegram
 telegram.org
 t.me
 telegram.me
 telegra.ph
 tdlib.org
 tg.dev
-
-# SoundCloud & NSFW
 soundcloud.com
 sndcdn.com
-
-# Steam
 steampowered.com
 steamcommunity.com
 steamstatic.com
