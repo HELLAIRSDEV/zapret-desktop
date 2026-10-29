@@ -7,6 +7,8 @@ set -euo pipefail
 PUBLISH_DIR="${1:?publish dir}"
 VERSION="${2:?version}"
 OUT_DIR="${3:-.}"
+mkdir -p "$OUT_DIR"
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 COMMON="$ROOT/../common"
