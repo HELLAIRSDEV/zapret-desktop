@@ -1,0 +1,46 @@
+Name:           zapret-desktop
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        GUI for DPI bypass (zapret / nfqws)
+License:        MIT
+URL:            https://github.com/HELLAIRSDEV/zapret-desktop
+Source0:        zapret-desktop-tree.tar.gz
+BuildArch:      x86_64
+Requires:       nftables
+Requires:       libmnl
+Requires:       polkit
+Requires:       fontconfig
+Requires:       freetype
+Requires:       harfbuzz
+Requires:       glib2
+Requires:       libX11
+Requires:       libICE
+Requires:       libSM
+Requires:       zlib
+
+%description
+Графический интерфейс для обхода DPI (Discord, YouTube, Telegram)
+на базе nfqws и nftables.
+
+%prep
+%setup -q -c -T
+
+%install
+mkdir -p %{buildroot}
+tar xzf %{SOURCE0} -C %{buildroot}
+
+%post
+chmod 755 /usr/lib/zapret-desktop/bin/zapret-ctl 2>/dev/null || true
+chmod 755 /usr/lib/zapret-desktop/bin/nfqws 2>/dev/null || true
+update-desktop-database -q 2>/dev/null || true
+
+%files
+/usr/lib/zapret-desktop
+/usr/bin/zapret-desktop
+/usr/share/applications/zapret-desktop.desktop
+/usr/share/icons/hicolor/256x256/apps/zapret-desktop.png
+/usr/share/polkit-1/actions/org.zapret.desktop.policy
+
+%changelog
+* Thu Oct 29 2026 HELLAIRSDEV <hellairss@mail.ru> - @VERSION@-1
+- Linux-порт: Avalonia UI, движок nfqws + nftables

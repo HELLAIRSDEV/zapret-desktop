@@ -1,0 +1,300 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ZapretDesktop.Linux.Views.MainWindow"
+        Title="Zapret Desktop"
+        Width="980" Height="720"
+        MinWidth="820" MinHeight="560"
+        Background="#16181C"
+        Icon="/Assets/zapret.png">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.h1">
+      <Setter Property="FontSize" Value="20" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.hint">
+      <Setter Property="Opacity" Value="0.7" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#2E7D32" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Padding" Value="18,10" />
+    </Style>
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="#B3261E" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Padding" Value="18,10" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="#1E2126" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="14" />
+      <Setter Property="Margin" Value="0,0,0,10" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="16">
+
+    <!-- Шапка: состояние + главная кнопка -->
+    <Border Grid.Row="0" Classes="card">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Spacing="4">
+          <TextBlock Classes="h1" Text="Zapret Desktop" />
+          <TextBlock Text="{Binding StatusText}" />
+          <StackPanel Orientation="Horizontal" Spacing="14">
+            <TextBlock Classes="hint" Text="{Binding EngineVersion, StringFormat='nfqws: {0}'}" />
+            <TextBlock Classes="hint" Text="{Binding AppVersion, StringFormat='версия {0}'}" />
+            <TextBlock Classes="hint" Text="● нужны root-права" IsVisible="{Binding !IsAdmin}" Foreground="#E5A50A" />
+            <TextBlock Classes="hint" Text="● движок не найден" IsVisible="{Binding !IsInstalled}" Foreground="#E5484D" />
+          </StackPanel>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Button Classes="primary"
+                  Command="{Binding ToggleServiceCommand}"
+                  IsEnabled="{Binding !IsBusy}"
+                  Content="Включить обход"
+                  IsVisible="{Binding !IsRunning}" />
+          <Button Classes="danger"
+                  Command="{Binding ToggleServiceCommand}"
+                  IsEnabled="{Binding !IsBusy}"
+                  Content="Выключить обход"
+                  IsVisible="{Binding IsRunning}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <TabControl Grid.Row="1" Margin="0,10,0,0">
+
+      <!-- ================= Обход ================= -->
+      <TabItem Header="Обход">
+        <Grid RowDefinitions="Auto,*,Auto" Margin="0,12,0,0">
+          <StackPanel Grid.Row="0" Spacing="8">
+            <TextBlock Text="Стратегия" FontWeight="SemiBold" />
+            <ComboBox ItemsSource="{Binding Presets}"
+                      SelectedItem="{Binding SelectedPreset}"
+                      HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Margin="0,4">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Description}" Classes="hint" TextWrapping="Wrap" MaxWidth="720" />
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </StackPanel>
+
+          <Border Grid.Row="1" Classes="card" Margin="0,12,0,0">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Подробно" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding SelectedPreset.Description}" TextWrapping="Wrap" Opacity="0.85" />
+              <TextBlock Text="{Binding SelectedPreset.LastTestStatus}" Classes="hint" />
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Content="Проверить эту стратегию"
+                        Command="{Binding TestSelectedPresetCommand}"
+                        IsEnabled="{Binding !IsTesting}" />
+                <Button Content="Подобрать автоматически"
+                        Command="{Binding RunAutoTestCommand}"
+                        IsEnabled="{Binding !IsTesting}" />
+                <Button Content="Отмена"
+                        Command="{Binding CancelAutoTestCommand}"
+                        IsVisible="{Binding IsTesting}" />
+                <Button Content="Обновить список" Command="{Binding RefreshPresetsCommand}" />
+              </StackPanel>
+              <ProgressBar Value="{Binding TestProgress}" Maximum="1" IsVisible="{Binding IsTesting}" />
+              <TextBlock Text="{Binding TestProgressText}" Classes="hint" IsVisible="{Binding IsTesting}" />
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Row="2" Classes="card">
+            <StackPanel Spacing="6">
+              <TextBlock Text="{Binding GameFilterHint}" Classes="hint" TextWrapping="Wrap" />
+              <TextBlock Text="Запуск от обычного пользователя: пароль попросит системный polkit (pkexec) один раз при включении." Classes="hint" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </Grid>
+      </TabItem>
+
+      <!-- ================= Автотест ================= -->
+      <TabItem Header="Автотест">
+        <Grid RowDefinitions="Auto,Auto,*" Margin="0,12,0,0">
+          <StackPanel Grid.Row="0" Spacing="8">
+            <TextBlock Text="Результаты подбора" FontWeight="SemiBold" />
+            <ProgressBar Value="{Binding TestProgress}" Maximum="1" />
+            <TextBlock Text="{Binding TestProgressText}" Classes="hint" />
+          </StackPanel>
+
+          <ListBox Grid.Row="2" Margin="0,10,0,0" ItemsSource="{Binding TestResults}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4">
+                  <TextBlock Grid.Column="0" Text="{Binding StatusIcon}" Margin="0,0,10,0" />
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Text="{Binding Preset.Name}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Details}" Classes="hint" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" HorizontalAlignment="Right">
+                    <TextBlock Text="{Binding SuccessPercent, StringFormat='{}{0:F0}%'}" HorizontalAlignment="Right" />
+                    <TextBlock Text="{Binding LatencyMs, StringFormat='{}{0} мс'}" Classes="hint" HorizontalAlignment="Right" />
+                  </StackPanel>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <ScrollViewer Grid.Row="1" Height="90" Margin="0,10,0,0">
+            <TextBlock Text="{Binding TestLog}" FontFamily="monospace" FontSize="11" TextWrapping="Wrap" />
+          </ScrollViewer>
+        </Grid>
+      </TabItem>
+
+      <!-- ================= Списки ================= -->
+      <TabItem Header="Списки">
+        <Grid ColumnDefinitions="220,*" Margin="0,12,0,0">
+          <StackPanel Grid.Column="0" Spacing="8" Margin="0,0,10,0">
+            <TextBlock Text="Файлы списков" FontWeight="SemiBold" />
+            <ListBox ItemsSource="{Binding ListFiles}"
+                     SelectedItem="{Binding SelectedListFile}"
+                     MinHeight="240" />
+            <Button Content="Открыть папку списков" Command="{Binding OpenListsFolderCommand}" />
+            <Button Content="Перечитать" Command="{Binding ReloadListCommand}" />
+          </StackPanel>
+
+          <Grid Grid.Column="1" RowDefinitions="*,Auto,Auto">
+            <TextBox Grid.Row="0" Text="{Binding ListContent}" AcceptsReturn="True"
+                     TextWrapping="NoWrap" FontFamily="monospace" FontSize="12"
+                     VerticalContentAlignment="Top" />
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+              <TextBox Grid.Column="0" Watermark="domain.com, ещё-домен.com" Text="{Binding DomainsToAdd}" />
+              <Button Grid.Column="1" Content="Добавить" Margin="8,0,0,0" Command="{Binding AddDomainsCommand}" />
+            </Grid>
+            <Button Grid.Row="2" Content="Сохранить список" Margin="0,8,0,0"
+                    Classes="primary" HorizontalAlignment="Left"
+                    Command="{Binding SaveListCommand}" />
+          </Grid>
+        </Grid>
+      </TabItem>
+
+      <!-- ================= Telegram ================= -->
+      <TabItem Header="Telegram">
+        <StackPanel Margin="0,12,0,0" Spacing="12">
+          <Border Classes="card">
+            <StackPanel Spacing="8">
+              <TextBlock Text="MTProto-прокси" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding TelegramStatus}" Classes="hint" TextWrapping="Wrap" />
+              <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoadingProxies}" />
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Content="Подобрать прокси" Command="{Binding FindProxiesCommand}" />
+                <Button Content="Проверить" Command="{Binding TestTelegramCommand}" />
+                <Button Content="Сохранить" Command="{Binding SaveTelegramProxyCommand}" />
+                <Button Content="Скопировать ссылку" Command="{Binding CopyTelegramProxyLinkCommand}" />
+                <Button Content="Открыть в Telegram" Command="{Binding OpenTelegramProxyLinkCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card">
+            <Grid ColumnDefinitions="*,120" RowDefinitions="Auto,Auto" >
+              <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4" Margin="0,0,10,8">
+                <TextBlock Text="Сервер" Classes="hint" />
+                <TextBox Text="{Binding TelegramProxyHost}" Watermark="host" />
+              </StackPanel>
+              <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4" Margin="0,0,0,8">
+                <TextBlock Text="Порт" Classes="hint" />
+                <TextBox Text="{Binding TelegramProxyPort}" />
+              </StackPanel>
+              <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Spacing="4">
+                <TextBlock Text="Секрет" Classes="hint" />
+                <TextBox Text="{Binding TelegramProxySecret}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Border Classes="card">
+            <StackPanel Spacing="6">
+              <TextBlock Text="Ссылка для Telegram" FontWeight="SemiBold" />
+              <SelectableTextBlock Text="{Binding TelegramProxyLink}" TextWrapping="Wrap" FontFamily="monospace" FontSize="12" />
+            </StackPanel>
+          </Border>
+
+          <ListBox ItemsSource="{Binding Proxies}" SelectedItem="{Binding SelectedProxy}" MaxHeight="180">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Display}" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </StackPanel>
+      </TabItem>
+
+      <!-- ================= Настройки ================= -->
+      <TabItem Header="Настройки">
+        <ScrollViewer Margin="0,12,0,0">
+          <StackPanel Spacing="10">
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <TextBlock Text="Поведение" FontWeight="SemiBold" />
+                <CheckBox Content="Сворачивать в трей" IsChecked="{Binding MinimizeToTray}" />
+                <CheckBox Content="Запускать свёрнутым" IsChecked="{Binding StartMinimized}" />
+                <CheckBox Content="Автозапуск при входе в систему" IsChecked="{Binding AutoStartWithWindows}" />
+                <CheckBox Content="Автоматически включать обход при старте" IsChecked="{Binding AutoStartZapret}" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <TextBlock Text="Движок" FontWeight="SemiBold" />
+                <CheckBox Content="Игровой фильтр (все порты 1024-65535)" IsChecked="{Binding GameFilter}" />
+                <CheckBox Content="Писать лог в файл" IsChecked="{Binding EnableLogging}" />
+                <TextBlock Text="{Binding EngineFolder, StringFormat='Папка движка: {0}'}" Classes="hint" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Content="bin" Command="{Binding OpenBinFolderCommand}" />
+                  <Button Content="логи" Command="{Binding OpenLogsFolderCommand}" />
+                  <Button Content="конфиг" Command="{Binding OpenConfigFolderCommand}" />
+                  <Button Content="списки" Command="{Binding OpenListsFolderCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <TextBlock Text="Стратегии Flowseal" FontWeight="SemiBold" />
+                <CheckBox Content="Проверять обновления стратегий" IsChecked="{Binding CheckFlowsealUpdates}" />
+                <TextBlock Text="{Binding FlowsealStatus}" Classes="hint" TextWrapping="Wrap" />
+                <Border IsVisible="{Binding IsFlowsealUpdateAvailable}" Background="#243024" CornerRadius="8" Padding="10">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="{Binding FlowsealUpdateText}" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Content="Обновить" Command="{Binding ApplyFlowsealUpdateCommand}" IsEnabled="{Binding !IsUpdatingFlowseal}" />
+                      <Button Content="Пропустить" Command="{Binding SkipFlowsealUpdateCommand}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+                <Button Content="Проверить сейчас" Command="{Binding CheckFlowsealUpdatesCommand}" IsEnabled="{Binding !IsCheckingFlowseal}" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- ================= Журнал ================= -->
+      <TabItem Header="Журнал">
+        <Grid RowDefinitions="Auto,*" Margin="0,12,0,0">
+          <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+            <Button Content="Очистить" Command="{Binding ClearLogCommand}" />
+            <Button Content="Открыть папку логов" Command="{Binding OpenLogsFolderCommand}" />
+          </StackPanel>
+          <TextBox Grid.Row="1" Text="{Binding LogText}" IsReadOnly="True"
+                   AcceptsReturn="True" TextWrapping="Wrap"
+                   FontFamily="monospace" FontSize="12"
+                   VerticalContentAlignment="Top" />
+        </Grid>
+      </TabItem>
+
+    </TabControl>
+
+    <TextBlock Grid.Row="2" Classes="hint" Margin="0,8,0,0"
+               Text="Linux-движок: nfqws + nftables · Windows: winws + WinDivert" />
+  </Grid>
+</Window>

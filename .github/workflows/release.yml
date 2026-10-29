@@ -1,0 +1,245 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Версия без префикса v (например 1.1.0)'
+        required: true
+        default: '1.1.0'
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  ZAPRET_REPO: 'bol-van/zapret'
+  ZAPRET_REF: 'master'
+
+jobs:
+  # ------------------------------------------------------------------
+  # 1. nfqws из исходников zapret (x86_64)
+  # ------------------------------------------------------------------
+  nfqws:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Собрать nfqws в Debian 11 (старый glibc для совместимости)
+        run: |
+          mkdir -p out
+          docker run --rm -v "$PWD/out:/out" -e ZAPRET_REPO="$ZAPRET_REPO" -e ZAPRET_REF="$ZAPRET_REF" debian:11 \
+            bash -c '
+              set -e
+              apt-get update -qq
+              apt-get install -y -qq git build-essential libnetfilter-queue-dev libcap-dev zlib1g-dev >/dev/null
+              git clone --depth 1 --branch "$ZAPRET_REF" "https://github.com/$ZAPRET_REPO.git" /src
+              make -C /src/nfq -j"$(nproc)"
+              cp /src/nfq/nfqws /out/nfqws
+              chmod 755 /out/nfqws
+            '
+
+      - name: Проверить бинарь
+        run: |
+          test -x out/nfqws
+          file out/nfqws
+          ldd out/nfqws || true
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nfqws-linux-x64
+          path: out/nfqws
+
+
+  # ------------------------------------------------------------------
+  # 2. Linux: publish + пакеты
+  # ------------------------------------------------------------------
+  linux:
+    needs: nfqws
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nfqws-linux-x64
+          path: src/ZapretDesktop.Linux/scripts
+
+      - name: Права на скрипты
+        run: |
+          chmod +x src/ZapretDesktop.Linux/scripts/nfqws
+          chmod +x src/ZapretDesktop.Linux/scripts/zapret-ctl
+
+      - name: Publish (self-contained linux-x64)
+        run: |
+          dotnet publish src/ZapretDesktop.Linux/ZapretDesktop.Linux.csproj \
+            -c Release -r linux-x64 --self-contained true \
+            -p:PublishSingleFile=false \
+            -p:InvariantGlobalization=true \
+            -p:DebugType=none \
+            -o publish/linux-x64
+
+      - name: Проверить содержимое publish
+        run: |
+          ls -la publish/linux-x64 | head -20
+          test -x publish/linux-x64/ZapretDesktop
+          test -x publish/linux-x64/bin/nfqws
+          test -x publish/linux-x64/bin/zapret-ctl
+
+      - name: Tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ -z "$VERSION" ] && VERSION="${{ github.event.inputs.version }}"
+          packaging/linux/tarball/build.sh publish/linux-x64 "$VERSION" dist
+
+      - name: .deb
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ -z "$VERSION" ] && VERSION="${{ github.event.inputs.version }}"
+          docker run --rm -v "$PWD:/work" -w /work debian:12 \
+            bash -c "apt-get update -qq && apt-get install -y -qq dpkg-dev >/dev/null && bash packaging/linux/deb/build.sh publish/linux-x64 '$VERSION' dist"
+
+      - name: .rpm
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ -z "$VERSION" ] && VERSION="${{ github.event.inputs.version }}"
+          docker run --rm -v "$PWD:/work" -w /work fedora:41 \
+            bash -c "dnf install -y -q rpm-build tar gzip >/dev/null && bash packaging/linux/rpm/build.sh publish/linux-x64 '$VERSION' dist"
+
+      - name: Arch-пакет
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ -z "$VERSION" ] && VERSION="${{ github.event.inputs.version }}"
+          docker run --rm -v "$PWD:/work" -w /work archlinux:latest \
+            bash -c "pacman -Sy --noconfirm --needed libarchive zstd >/dev/null && bash packaging/linux/arch/build.sh publish/linux-x64 '$VERSION' dist"
+
+      - name: Показать артефакты
+        run: ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: dist/*
+
+
+  # ------------------------------------------------------------------
+  # 3. Windows: WPF как раньше
+  # ------------------------------------------------------------------
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Скачать winws (zapret для Windows)
+        shell: pwsh
+        run: |
+          $api = "https://api.github.com/repos/$env:ZAPRET_REPO/releases/latest"
+          $release = Invoke-RestMethod -Uri $api -Headers @{ 'User-Agent' = 'zapret-desktop-ci' }
+          $asset = $release.assets | Where-Object { $_.name -like '*.zip' -and $_.name -like '*win*' } | Select-Object -First 1
+          if (-not $asset) { $asset = $release.assets | Where-Object { $_.name -like '*.zip' } | Select-Object -First 1 }
+          Write-Host "Скачиваем $($asset.name)"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile zapret.zip
+          Expand-Archive zapret.zip -DestinationPath zapret-tmp -Force
+          New-Item -ItemType Directory -Force -Path bin | Out-Null
+          Get-ChildItem zapret-tmp -Recurse -Include winws.exe,WinDivert*.dll,WinDivert*.sys,cygwin1.dll |
+            ForEach-Object { Copy-Item $_.FullName -Destination bin -Force }
+          Get-ChildItem zapret-tmp -Recurse -Filter *.bin |
+            ForEach-Object { Copy-Item $_.FullName -Destination bin -Force }
+          Get-ChildItem bin | Select-Object Name
+
+      - name: Publish win-x64
+        run: >
+          dotnet publish src/ZapretDesktop.Desktop/ZapretDesktop.Desktop.csproj
+          -c Release -r win-x64 --self-contained true -o release/win-x64
+
+      - name: Publish win-arm64
+        run: >
+          dotnet publish src/ZapretDesktop.Desktop/ZapretDesktop.Desktop.csproj
+          -c Release -r win-arm64 --self-contained true -o release/win-arm64
+
+      - name: Упаковать zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path release/win-x64/* -DestinationPath dist/ZapretDesktop-win-x64.zip -Force
+          Compress-Archive -Path release/win-arm64/* -DestinationPath dist/ZapretDesktop-win-arm64.zip -Force
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\installer.iss
+        continue-on-error: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: dist/*
+
+
+  # ------------------------------------------------------------------
+  # 4. Релиз
+  # ------------------------------------------------------------------
+  release:
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Собрать файлы в одну папку
+        run: |
+          mkdir -p dist
+          find artifacts -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.pkg.tar.zst' -o -name '*.tar.gz' -o -name '*.zip' -o -name '*.exe' \) -exec cp {} dist/ \;
+          ls -la dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          name: Zapret Desktop ${{ github.ref_name }}
+          body: |
+            ## Что нового
+
+            - **Linux**: новый интерфейс на Avalonia, движок `nfqws` + `nftables`
+              (Arch, Debian/Ubuntu, Fedora).
+            - **Windows**: без изменений, движок `winws` + WinDivert.
+
+            ## Установка
+
+            ### Arch / Manjaro
+            ```bash
+            sudo pacman -U zapret-desktop-*.pkg.tar.zst
+            ```
+
+            ### Debian / Ubuntu
+            ```bash
+            sudo apt install ./zapret-desktop_*_amd64.deb
+            ```
+
+            ### Fedora
+            ```bash
+            sudo dnf install ./zapret-desktop-*.rpm
+            ```
+
+            ### Универсальный архив
+            ```bash
+            tar xzf ZapretDesktop-linux-x86_64-v*.tar.gz
+            ./ZapretDesktop/ZapretDesktop
+            ```
+
+            На Linux при первом включении обхода система спросит пароль
+            администратора — создаются правила nftables и запускается `nfqws`.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

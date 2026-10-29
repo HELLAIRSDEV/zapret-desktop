@@ -4,6 +4,9 @@ public static class ZapretEngineFactory
 {
     public static IZapretEngine Create()
     {
-        return new WindowsZapretEngine();
+        if (OperatingSystem.IsWindows())
+            return new WindowsZapretEngine();
+
+        return new LinuxZapretEngine();
     }
 }

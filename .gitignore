@@ -487,3 +487,12 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Linux-порт: артефакты сборки и скачанный движок
+src/ZapretDesktop.Linux/scripts/nfqws
+src/ZapretDesktop.Linux/scripts/nfqws-*
+publish/
+dist/
+*.pkg.tar.zst
+*.deb
+*.rpm

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Zapret Desktop
+GenericName=DPI Bypass
+Comment=Обход DPI для Discord, YouTube и Telegram (nfqws + nftables)
+Exec=zapret-desktop
+Icon=zapret-desktop
+Terminal=false
+Categories=Network;Utility;
+Keywords=zapret;dpi;discord;youtube;telegram;bypass;
+StartupWMClass=ZapretDesktop

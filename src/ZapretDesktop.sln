@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZapretDesktop.Core", "Zapre
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZapretDesktop.Desktop", "ZapretDesktop.Desktop\ZapretDesktop.Desktop.csproj", "{8D4E1D4D-A23F-4E3B-8290-924C50A01A80}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZapretDesktop.Linux", "ZapretDesktop.Linux\ZapretDesktop.Linux.csproj", "{63AE0FA8-E124-4EF1-8A56-957C81C4790B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{8D4E1D4D-A23F-4E3B-8290-924C50A01A80}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8D4E1D4D-A23F-4E3B-8290-924C50A01A80}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8D4E1D4D-A23F-4E3B-8290-924C50A01A80}.Release|Any CPU.Build.0 = Release|Any CPU
+		{63AE0FA8-E124-4EF1-8A56-957C81C4790B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{63AE0FA8-E124-4EF1-8A56-957C81C4790B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{63AE0FA8-E124-4EF1-8A56-957C81C4790B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{63AE0FA8-E124-4EF1-8A56-957C81C4790B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

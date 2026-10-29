@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+
+  <vendor>Zapret Desktop</vendor>
+  <vendor_url>https://github.com/HELLAIRSDEV/zapret-desktop</vendor_url>
+
+  <action id="org.zapret.desktop.ctl">
+    <description>Запуск и остановка обхода DPI (nfqws)</description>
+    <message>Для запуска обхода DPI нужны права root: создаются правила nftables и запускается nfqws.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/zapret-desktop/bin/zapret-ctl</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

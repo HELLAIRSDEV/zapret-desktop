@@ -1,19 +1,28 @@
 # Zapret Desktop
 
-Простая графическая оболочка для [zapret](https://github.com/bol-van/zapret) (`winws`) на Windows.
+Простая графическая оболочка для [zapret](https://github.com/bol-van/zapret).
 Обходит DPI-блокировки Discord, YouTube, Telegram и других сервисов: выбирает рабочую
-стратегию, запускает `winws` без окна и живёт в системном трее.
+стратегию, запускает движок без окна и живёт в системном трее.
+
+Работает на **Windows** (`winws` + WinDivert) и **Linux** (`nfqws` + nftables):
+Arch, Debian/Ubuntu, Fedora.
 
 ## 📥 Скачать
 
 | Сборка | Для чего |
 |---|---|
-| [**Установщик (x64)**](https://github.com/HELLAIRS/zapret-desktop/releases/latest/download/ZapretDesktop-Setup-x64.exe) | Обычная установка в Windows, ярлыки, удаление через «Программы и компоненты» |
-| [**Portable (x64)**](https://github.com/HELLAIRS/zapret-desktop/releases/latest/download/ZapretDesktop-win-x64.zip) | Распаковал → запустил, без установки |
-| [**Portable (ARM64)**](https://github.com/HELLAIRS/zapret-desktop/releases/latest/download/ZapretDesktop-win-arm64.zip) | Для Windows на ARM-процессорах (Snapdragon X и т.п.) |
-| [Все релизы](https://github.com/HELLAIRS/zapret-desktop/releases) | Предыдущие версии |
+| [**Установщик (x64)**](https://github.com/HELLAIRSDEV/zapret-desktop/releases/latest/download/ZapretDesktop-Setup-x64.exe) | Обычная установка в Windows, ярлыки, удаление через «Программы и компоненты» |
+| [**Portable (x64)**](https://github.com/HELLAIRSDEV/zapret-desktop/releases/latest/download/ZapretDesktop-win-x64.zip) | Распаковал → запустил, без установки |
+| [**Portable (ARM64)**](https://github.com/HELLAIRSDEV/zapret-desktop/releases/latest/download/ZapretDesktop-win-arm64.zip) | Для Windows на ARM-процессорах (Snapdragon X и т.п.) |
+| [**Arch (pkg.tar.zst)**](https://github.com/HELLAIRSDEV/zapret-desktop/releases/latest) | `sudo pacman -U zapret-desktop-*.pkg.tar.zst` |
+| [**Debian / Ubuntu (deb)**](https://github.com/HELLAIRSDEV/zapret-desktop/releases/latest) | `sudo apt install ./zapret-desktop_*_amd64.deb` |
+| [**Fedora (rpm)**](https://github.com/HELLAIRSDEV/zapret-desktop/releases/latest) | `sudo dnf install ./zapret-desktop-*.rpm` |
+| [**Linux portable (tar.gz)**](https://github.com/HELLAIRSDEV/zapret-desktop/releases/latest) | Распаковал → `./ZapretDesktop` |
+| [Все релизы](https://github.com/HELLAIRSDEV/zapret-desktop/releases) | Предыдущие версии |
 
 > Все сборки self-contained — .NET отдельно ставить не нужно.
+> Для Linux-версии нужны `nftables` и `polkit` (`pkexec`); при первом включении
+> обхода система спросит пароль администратора.
 
 ## Возможности
 
@@ -33,6 +42,32 @@
   приоритет и освобождает память.
 - **Настройки** — автозапуск с Windows, запуск свёрнутым, автозапуск обхода, логи,
   игровой фильтр (порты 1024–65535).
+
+## Linux
+
+Движок на Linux — `nfqws` из состава zapret, трафик заворачивается в NFQUEUE
+правилами `nftables`. Бинарь `nfqws` уже входит в пакет, отдельно ставить не нужно.
+
+```bash
+# Arch / Manjaro
+sudo pacman -U zapret-desktop-1.1.0-1-x86_64.pkg.tar.zst
+
+# Debian / Ubuntu
+sudo apt install ./zapret-desktop_1.1.0_amd64.deb
+
+# Fedora
+sudo dnf install ./zapret-desktop-1.1.0-1.x86_64.rpm
+
+# Или просто распаковать архив
+tar xzf ZapretDesktop-linux-x86_64-v1.1.0.tar.gz
+./ZapretDesktop-linux-x86_64/ZapretDesktop
+```
+
+Права root нужны только движку: при включении обхода `pkexec` попросит пароль
+(через polkit, повторно в течение сессии не спрашивает) — приложение создаёт
+правила nftables и запускает `nfqws`, при выключении всё убирает.
+
+Данные в пакетной установке: `~/.local/share/ZapretDesktop/` (списки, конфиг, логи).
 
 ## Требования
 
@@ -69,6 +104,27 @@
 - `logs/` — журналы `zapret-ГГГГ-ММ-ДД.log` и `crash.log`.
 
 ## Сборка из исходников
+
+Windows (WPF):
+
+```bash
+dotnet publish src/ZapretDesktop.Desktop/ZapretDesktop.Desktop.csproj -c Release -r win-x64 --self-contained
+```
+
+Linux (Avalonia):
+
+```bash
+# nfqws нужен в src/ZapretDesktop.Linux/scripts/nfqws
+make -C zapret/nfq   # из https://github.com/bol-van/zapret
+cp zapret/nfq/nfqws src/ZapretDesktop.Linux/scripts/
+
+dotnet publish src/ZapretDesktop.Linux/ZapretDesktop.Linux.csproj -c Release -r linux-x64 --self-contained
+```
+
+Пакеты `.deb` / `.rpm` / `pkg.tar.zst` собираются скриптами в `packaging/linux/`;
+CI (`.github/workflows/release.yml`) делает это автоматически по тегу `v*`.
+
+
 
 ```powershell
 dotnet build src\ZapretDesktop.sln -c Release

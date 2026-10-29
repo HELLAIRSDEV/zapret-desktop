@@ -1,5 +1,5 @@
 #define AppName "Zapret Desktop"
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
 #define AppExe "ZapretDesktop.exe"
 #define AppUrl "https://github.com/HELLAIRS/zapret-desktop"
 
