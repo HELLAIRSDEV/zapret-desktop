@@ -25,11 +25,14 @@ jobs:
   # ------------------------------------------------------------------
   nfqws:
     runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Скачать статический nfqws из релиза zapret
         run: |
           mkdir -p out
-          URL="$(curl -sS "https://api.github.com/repos/$ZAPRET_REPO/releases/latest" \
+          URL="$(curl -sS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$ZAPRET_REPO/releases/latest" \
             | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | select(.name | contains("openwrt") | not) | .browser_download_url' \
             | head -1)"
           echo "Архив: $URL"
