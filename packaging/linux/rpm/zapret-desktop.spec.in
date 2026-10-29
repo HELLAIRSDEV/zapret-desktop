@@ -1,3 +1,8 @@
+# nfqws — готовая статическая сборка без build-id, debuginfo не нужен
+%global debug_package %{nil}
+%global _build_id_links none
+%global __strip /bin/true
+
 Name:           zapret-desktop
 Version:        @VERSION@
 Release:        1%{?dist}
