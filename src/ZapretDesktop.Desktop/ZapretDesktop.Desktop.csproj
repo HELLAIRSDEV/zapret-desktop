@@ -10,7 +10,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>ZapretDesktop</AssemblyName>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <!-- Меньше памяти: рабочая станция + неконкурентный GC -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>

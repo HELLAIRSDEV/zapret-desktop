@@ -50,16 +50,16 @@ Arch, Debian/Ubuntu, Fedora.
 
 ```bash
 # Arch / Manjaro
-sudo pacman -U zapret-desktop-1.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -U zapret-desktop-1.1.1-1-x86_64.pkg.tar.zst
 
 # Debian / Ubuntu
-sudo apt install ./zapret-desktop_1.1.0_amd64.deb
+sudo apt install ./zapret-desktop_1.1.1_amd64.deb
 
 # Fedora
-sudo dnf install ./zapret-desktop-1.1.0-1.x86_64.rpm
+sudo dnf install ./zapret-desktop-1.1.1-1.x86_64.rpm
 
 # Или просто распаковать архив
-tar xzf ZapretDesktop-linux-x86_64-v1.1.0.tar.gz
+tar xzf ZapretDesktop-linux-x86_64-v1.1.1.tar.gz
 ./ZapretDesktop-linux-x86_64/ZapretDesktop
 ```
 

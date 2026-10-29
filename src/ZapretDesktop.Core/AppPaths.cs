@@ -34,6 +34,51 @@ public static class AppPaths
         Directory.CreateDirectory(ListsDir);
         Directory.CreateDirectory(ConfigDir);
         Directory.CreateDirectory(LogsDir);
+
+        SeedLists();
+    }
+
+    /// <summary>
+    /// При пакетной установке списки лежат в /usr/lib (read-only), а рабочие
+    /// копии — в каталоге данных. При первом запуске переносим файлы из пакета,
+    /// не затирая то, что пользователь уже отредактировал.
+    /// </summary>
+    public static void SeedLists()
+    {
+        try
+        {
+            var bundled = Path.Combine(Root, "lists");
+            if (!Directory.Exists(bundled)) return;
+            if (Path.GetFullPath(bundled) == Path.GetFullPath(ListsDir)) return;
+
+            Directory.CreateDirectory(ListsDir);
+
+            foreach (var source in Directory.GetFiles(bundled))
+            {
+                var target = Path.Combine(ListsDir, Path.GetFileName(source));
+
+                if (File.Exists(target) && HasEntries(target)) continue;
+
+                File.Copy(source, target, overwrite: true);
+            }
+        }
+        catch
+        {
+            // подсев не критичен для работы
+        }
+    }
+
+    private static bool HasEntries(string path)
+    {
+        try
+        {
+            return File.ReadLines(path).Any(line =>
+                !string.IsNullOrWhiteSpace(line) && !line.TrimStart().StartsWith('#'));
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string ResolveDataRoot()
