@@ -18,6 +18,9 @@ public static class AppPaths
     /// <summary>Каталог с бинарниками nfqws/winws (может быть read-only в пакете).</summary>
     public static string BinDir { get; } = ResolveBinDir();
 
+    /// <summary>Сюда движок складывается, если BinDir доступен только на чтение.</summary>
+    public static string UserBinDir => Path.Combine(DataRoot, "bin");
+
     public static string ListsDir => Path.Combine(DataRoot, "lists");
     public static string ConfigDir => Path.Combine(DataRoot, "config");
     public static string LogsDir => Path.Combine(DataRoot, "logs");
@@ -26,7 +29,8 @@ public static class AppPaths
 
     public static void EnsureDirectories()
     {
-        Directory.CreateDirectory(BinDir);
+        try { Directory.CreateDirectory(BinDir); } catch { /* read-only пакет */ }
+        Directory.CreateDirectory(UserBinDir);
         Directory.CreateDirectory(ListsDir);
         Directory.CreateDirectory(ConfigDir);
         Directory.CreateDirectory(LogsDir);

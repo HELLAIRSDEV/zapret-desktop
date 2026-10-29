@@ -1,5 +1,8 @@
 using System.Diagnostics;
 using System.Text;
+using System.Formats.Tar;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace ZapretDesktop.Core.Engines;
@@ -46,6 +49,9 @@ public class LinuxZapretEngine : IZapretEngine, IDisposable
         {
             var bundled = Path.Combine(AppPaths.BinDir, "nfqws");
             if (File.Exists(bundled)) return bundled;
+
+            var userBundled = Path.Combine(AppPaths.UserBinDir, "nfqws");
+            if (File.Exists(userBundled)) return userBundled;
 
             foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
                      .Split(':', StringSplitOptions.RemoveEmptyEntries))
@@ -224,6 +230,10 @@ public class LinuxZapretEngine : IZapretEngine, IDisposable
 
     public void Stop()
     {
+        // nfqws работает от root, поэтому останавливаем его через helper:
+        // он убивает процесс и удаляет правила nftables.
+        CleanupHelper();
+
         Process? process;
         lock (_sync)
         {
@@ -237,23 +247,25 @@ public class LinuxZapretEngine : IZapretEngine, IDisposable
             {
                 if (!process.HasExited)
                 {
-                    Log("Останавливаем nfqws...");
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit(3000);
+                    process.WaitForExit(2000);
+
+                    if (!process.HasExited)
+                    {
+                        // Helper не смог (нет прав) — пробуем хотя бы свой процесс.
+                        try { process.Kill(entireProcessTree: true); } catch { }
+                        process.WaitForExit(1000);
+                    }
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                Log($"[WARN] Не удалось остановить nfqws: {ex.Message}");
+                // процесс уже завершён
             }
             finally
             {
                 try { process.Dispose(); } catch { /* ignore */ }
             }
         }
-
-        // Подчищаем правила nftables и осиротевшие процессы.
-        CleanupHelper();
 
         CloseLog();
         StateChanged?.Invoke(false);
@@ -345,29 +357,120 @@ public class LinuxZapretEngine : IZapretEngine, IDisposable
     }
 
     /// <summary>
-    /// На Linux nfqws собирается под конкретный дистрибутив, поэтому автоскачивание
-    /// небезопасно. Метод проверяет наличие и объясняет, чего не хватает.
+    /// Скачивает официальную статическую сборку nfqws из релизов bol-van/zapret.
+    /// Статический бинарь не требует libnetfilter_queue и работает на любом дистрибутиве.
     /// </summary>
-    public Task EnsureInstalledAsync(IProgress<double>? progress = null)
+    public async Task EnsureInstalledAsync(IProgress<double>? progress = null)
     {
-        progress?.Report(0.5);
-
         if (NfqwsPath != null)
         {
             Log("nfqws уже установлен.");
             progress?.Report(1.0);
-            return Task.CompletedTask;
+            return;
         }
 
-        Log("[ERR] nfqws не найден.");
-        Log("Установите его одним из способов:");
-        Log("  Arch:   yay -S zapret-git   (или pacman -S zapret)");
-        Log("  Debian: sudo apt install zapret   (если есть в репозитории)");
-        Log("  Fedora: sudo dnf install zapret");
-        Log("  Или положите собранный nfqws в папку bin рядом с приложением.");
-        progress?.Report(0.0);
+        var arch = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X64 => "x86_64",
+            Architecture.Arm64 => "arm64",
+            Architecture.Arm => "arm",
+            _ => null
+        };
 
-        throw new FileNotFoundException("nfqws не найден в системе.");
+        if (arch == null)
+            throw new PlatformNotSupportedException(
+                $"Архитектура {RuntimeInformation.ProcessArchitecture} не поддерживается.");
+
+        Log("nfqws не найден — скачиваем статическую сборку zapret с GitHub...");
+        progress?.Report(0.05);
+
+        using var client = new HttpClient();
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("ZapretDesktop/1.1");
+        client.Timeout = TimeSpan.FromMinutes(5);
+
+        string? archivePath = null;
+        string? extractDir = null;
+
+        try
+        {
+            var json = await client.GetStringAsync("https://api.github.com/repos/bol-van/zapret/releases/latest");
+            progress?.Report(0.2);
+
+            using var doc = JsonDocument.Parse(json);
+            var assets = doc.RootElement.GetProperty("assets");
+
+            string? url = null;
+            foreach (var asset in assets.EnumerateArray())
+            {
+                var name = asset.GetProperty("name").GetString() ?? string.Empty;
+                if (!name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)) continue;
+                if (name.Contains("openwrt", StringComparison.OrdinalIgnoreCase)) continue;
+
+                url = asset.GetProperty("browser_download_url").GetString();
+                break;
+            }
+
+            if (string.IsNullOrEmpty(url))
+                throw new InvalidOperationException("В релизе zapret не найден архив с бинарниками.");
+
+            Log($"Скачиваем: {url}");
+            archivePath = Path.Combine(Path.GetTempPath(), "zapret_desktop_linux.tar.gz");
+            extractDir = Path.Combine(Path.GetTempPath(), "zapret_desktop_linux_extract");
+
+            await using (var stream = await client.GetStreamAsync(url))
+            await using (var file = File.Create(archivePath))
+            {
+                await stream.CopyToAsync(file);
+            }
+
+            progress?.Report(0.6);
+
+            if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true);
+            Directory.CreateDirectory(extractDir);
+
+            await TarFile.ExtractToDirectoryAsync(archivePath, extractDir, overwriteFiles: true);
+            progress?.Report(0.8);
+
+            var found = Directory
+                .GetFiles(extractDir, "nfqws", SearchOption.AllDirectories)
+                .FirstOrDefault(f => f.Replace('\\', '/').Contains($"/linux-{arch}/", StringComparison.OrdinalIgnoreCase));
+
+            if (found == null)
+                throw new FileNotFoundException($"В архиве нет nfqws для linux-{arch}.");
+
+            var targetDir = AppPaths.BinDir;
+            try
+            {
+                Directory.CreateDirectory(targetDir);
+                var probe = Path.Combine(targetDir, $".probe-{Environment.ProcessId}");
+                using (File.Create(probe, 1, FileOptions.DeleteOnClose)) { }
+            }
+            catch
+            {
+                // пакетная установка в /usr/lib — пишем в домашний каталог
+                targetDir = AppPaths.UserBinDir;
+                Directory.CreateDirectory(targetDir);
+            }
+
+            var target = Path.Combine(targetDir, "nfqws");
+            File.Copy(found, target, overwrite: true);
+            EnsureExecutable(target);
+
+            progress?.Report(1.0);
+            Log($"✅ nfqws установлен: {target}");
+            Log(await GetVersionAsync());
+        }
+        catch (Exception ex)
+        {
+            Log($"[ERR] Не удалось установить nfqws: {ex.Message}");
+            Log("Можно поставить вручную: nfqws из состава zapret (bol-van/zapret) в папку bin.");
+            throw;
+        }
+        finally
+        {
+            try { if (archivePath != null && File.Exists(archivePath)) File.Delete(archivePath); } catch { }
+            try { if (extractDir != null && Directory.Exists(extractDir)) Directory.Delete(extractDir, true); } catch { }
+        }
     }
 
     private static IEnumerable<string> SplitArguments(string commandLine)

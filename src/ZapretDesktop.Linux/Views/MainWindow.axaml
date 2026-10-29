@@ -45,7 +45,6 @@
           <StackPanel Orientation="Horizontal" Spacing="14">
             <TextBlock Classes="hint" Text="{Binding EngineVersion, StringFormat='nfqws: {0}'}" />
             <TextBlock Classes="hint" Text="{Binding AppVersion, StringFormat='версия {0}'}" />
-            <TextBlock Classes="hint" Text="● нужны root-права" IsVisible="{Binding !IsAdmin}" Foreground="#E5A50A" />
             <TextBlock Classes="hint" Text="● движок не найден" IsVisible="{Binding !IsInstalled}" Foreground="#E5484D" />
           </StackPanel>
         </StackPanel>

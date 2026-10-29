@@ -49,7 +49,7 @@ Priority: optional
 Architecture: $ARCH
 Maintainer: HELLAIRSDEV <hellairss@mail.ru>
 Installed-Size: $INSTALLED_SIZE
-Depends: nftables, pkexec | policykit-1, libmnl0, libfontconfig1, libfreetype6, libharfbuzz0b, libglib2.0-0, libx11-6, libice6, libsm6, zlib1g
+Depends: nftables, pkexec | policykit-1, libfontconfig1, libfreetype6, libharfbuzz0b, libglib2.0-0, libx11-6, libice6, libsm6, zlib1g
 Recommends: libicu72 | libicu74 | libicu76
 Homepage: https://github.com/HELLAIRSDEV/zapret-desktop
 Description: Zapret Desktop - GUI for DPI bypass (zapret/nfqws)

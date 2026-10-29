@@ -142,8 +142,8 @@ public partial class MainViewModel : ObservableObject
         EngineVersion = await _engine.GetVersionAsync();
 
         AppendLog(IsAdmin
-            ? "Приложение запущено с правами администратора."
-            : "⚠ Приложение запущено БЕЗ прав администратора — nfqws может не запуститься.");
+            ? "Приложение запущено с правами root."
+            : "Приложение запущено от обычного пользователя — root-права запросит pkexec при включении обхода.");
 
         await ReloadPresetsAsync();
         await ReloadListFilesAsync();

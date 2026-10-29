@@ -119,9 +119,9 @@ cmd_start() {
     trap 'stop_all' EXIT INT TERM
 
     log "Правила nftables созданы (NFQUEUE $QNUM)."
-    log "Запуск: $NFQWS ${nfqws_args[*]}"
+    log "Запуск: $NFQWS --qnum=$QNUM ${nfqws_args[*]}"
 
-    "$NFQWS" "${nfqws_args[@]}" &
+    "$NFQWS" "--qnum=$QNUM" "${nfqws_args[@]}" &
     local pid=$!
     echo "$pid" > "$PIDFILE"
 

@@ -58,7 +58,6 @@ size = $((SIZE * 1024))
 arch = x86_64
 license = MIT
 depend = nftables
-depend = libmnl
 depend = polkit
 depend = fontconfig
 depend = freetype2

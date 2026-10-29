@@ -26,25 +26,25 @@ jobs:
   nfqws:
     runs-on: ubuntu-24.04
     steps:
-      - name: Собрать nfqws в Debian 11 (старый glibc для совместимости)
+      - name: Скачать статический nfqws из релиза zapret
         run: |
           mkdir -p out
-          docker run --rm -v "$PWD/out:/out" -e ZAPRET_REPO="$ZAPRET_REPO" -e ZAPRET_REF="$ZAPRET_REF" debian:11 \
-            bash -c '
-              set -e
-              apt-get update -qq
-              apt-get install -y -qq git build-essential libnetfilter-queue-dev libcap-dev zlib1g-dev >/dev/null
-              git clone --depth 1 --branch "$ZAPRET_REF" "https://github.com/$ZAPRET_REPO.git" /src
-              make -C /src/nfq -j"$(nproc)"
-              cp /src/nfq/nfqws /out/nfqws
-              chmod 755 /out/nfqws
-            '
+          URL="$(curl -sS "https://api.github.com/repos/$ZAPRET_REPO/releases/latest" \
+            | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | select(.name | contains("openwrt") | not) | .browser_download_url' \
+            | head -1)"
+          echo "Архив: $URL"
+          curl -sSL "$URL" -o zapret.tar.gz
+          tar xzf zapret.tar.gz
+          SRC="$(find . -type f -path '*/binaries/linux-x86_64/nfqws' | head -1)"
+          test -n "$SRC"
+          cp "$SRC" out/nfqws
+          chmod 755 out/nfqws
 
       - name: Проверить бинарь
         run: |
-          test -x out/nfqws
           file out/nfqws
-          ldd out/nfqws || true
+          ldd out/nfqws || echo "статический бинарь — зависимостей нет"
+          ./out/nfqws --version
           ls -la out
 
       - uses: actions/upload-artifact@v4
