@@ -33,8 +33,8 @@ chmod 755 "$STAGE/usr/bin/zapret-desktop"
 install -m 644 "$COMMON/zapret-desktop.desktop" "$STAGE/usr/share/applications/"
 install -m 644 "$COMMON/org.zapret.desktop.policy" "$STAGE/usr/share/polkit-1/actions/"
 
-if [ -f "$ROOT/../../src/ZapretDesktop.Linux/Assets/zapret.png" ]; then
-    install -m 644 "$ROOT/../../src/ZapretDesktop.Linux/Assets/zapret.png" \
+if [ -f "$ROOT/../../../src/ZapretDesktop.Linux/Assets/zapret.png" ]; then
+    install -m 644 "$ROOT/../../../src/ZapretDesktop.Linux/Assets/zapret.png" \
         "$STAGE/usr/share/icons/hicolor/256x256/apps/zapret-desktop.png"
 fi
 
