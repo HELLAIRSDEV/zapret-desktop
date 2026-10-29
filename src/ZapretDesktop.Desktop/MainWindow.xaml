@@ -26,6 +26,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -41,7 +42,37 @@
             </ui:TitleBar.TrailingContent>
         </ui:TitleBar>
 
-        <TabControl x:Name="MainTabs" Grid.Row="1" Margin="12,0,12,12">
+        <!-- ================= Обновление стратегий Flowseal ================= -->
+        <ui:Card
+            Grid.Row="1"
+            Margin="12,0,12,8"
+            Visibility="{Binding IsFlowsealUpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel>
+                <ui:TextBlock
+                    FontTypography="BodyStrong"
+                    Text="Доступно обновление стратегий Flowseal" />
+                <ui:TextBlock
+                    Appearance="Secondary"
+                    Text="{Binding FlowsealUpdateText}"
+                    TextWrapping="Wrap" />
+                <WrapPanel Margin="0,8,0,0">
+                    <ui:Button
+                        Appearance="Primary"
+                        Command="{Binding ApplyFlowsealUpdateCommand}"
+                        Content="Обновить"
+                        Icon="{ui:SymbolIcon ArrowSync24}"
+                        IsEnabled="{Binding IsUpdatingFlowseal, Converter={StaticResource BooleanInverterConverter}}" />
+                    <ui:Button
+                        Margin="8,0,0,0"
+                        Appearance="Secondary"
+                        Command="{Binding SkipFlowsealUpdateCommand}"
+                        Content="Пропустить"
+                        IsEnabled="{Binding IsUpdatingFlowseal, Converter={StaticResource BooleanInverterConverter}}" />
+                </WrapPanel>
+            </StackPanel>
+        </ui:Card>
+
+        <TabControl x:Name="MainTabs" Grid.Row="2" Margin="12,0,12,12">
 
             <!-- ================= Обход ================= -->
             <TabItem Header="Обход">
@@ -467,7 +498,7 @@
             </TabItem>
 
             <!-- ================= Списки ================= -->
-            <TabItem Header="Списки">
+            <TabItem x:Name="ListsTab" Header="Списки">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
@@ -597,6 +628,34 @@
                                     Appearance="Secondary"
                                     FontSize="11"
                                     Text="Настройки сохраняются автоматически. winws работает без окна и не отображается на панели задач."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </ui:Card>
+
+                        <ui:Card Margin="0,0,0,10">
+                            <StackPanel>
+                                <ui:TextBlock FontTypography="BodyStrong" Text="Стратегии Flowseal" />
+                                <ui:TextBlock Appearance="Secondary" Text="Быстрая проверка обновлений стратегий на GitHub" />
+
+                                <ui:ToggleSwitch
+                                    Margin="0,8,0,2"
+                                    Content="Проверять обновления Flowseal при запуске"
+                                    IsChecked="{Binding CheckFlowsealUpdates}" />
+
+                                <WrapPanel Margin="0,6,0,0">
+                                    <ui:Button
+                                        Appearance="Secondary"
+                                        Command="{Binding CheckFlowsealUpdatesCommand}"
+                                        Content="Проверить сейчас"
+                                        Icon="{ui:SymbolIcon ArrowSync24}"
+                                        IsEnabled="{Binding IsCheckingFlowseal, Converter={StaticResource BooleanInverterConverter}}" />
+                                </WrapPanel>
+
+                                <ui:TextBlock
+                                    Margin="0,6,0,0"
+                                    Appearance="Secondary"
+                                    FontSize="11"
+                                    Text="{Binding FlowsealStatus}"
                                     TextWrapping="Wrap" />
                             </StackPanel>
                         </ui:Card>

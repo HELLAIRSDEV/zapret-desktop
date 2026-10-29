@@ -14,6 +14,12 @@ public static class StrategyCatalog
     public const string CategoryYouTube = "YouTube";
     public const string CategorySimple = "Простые";
 
+    /// <summary>
+    /// Встроенные стратегии, которые дублируют набор Flowseal.
+    /// Когда из GitHub загружены актуальные стратегии, эти пункты убираются из списка.
+    /// </summary>
+    public static readonly string[] FlowsealLegacyIds = { "general", "alt", "alt2", "alt3", "alt4" };
+
     private const string Excludes =
         "--hostlist-exclude=\"{LISTS}\\list-exclude.txt\" --hostlist-exclude=\"{LISTS}\\list-exclude-user.txt\" " +
         "--ipset-exclude=\"{LISTS}\\ipset-exclude.txt\" --ipset-exclude=\"{LISTS}\\ipset-exclude-user.txt\"";

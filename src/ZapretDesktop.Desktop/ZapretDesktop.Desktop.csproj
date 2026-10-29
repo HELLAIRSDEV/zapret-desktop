@@ -14,6 +14,11 @@
     <!-- Меньше памяти: рабочая станция + неконкурентный GC -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <!-- Быстрый старт: AOT-компиляция горячих методов при публикации -->
+    <TieredPGO>true</TieredPGO>
+    <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
+    <!-- Не тащить локализованные ресурсы фреймворка (заметно меньше файлов и I/O) -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>

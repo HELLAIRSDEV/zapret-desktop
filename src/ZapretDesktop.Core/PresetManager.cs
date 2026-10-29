@@ -5,18 +5,33 @@ namespace ZapretDesktop.Core.Services;
 
 public class PresetManager
 {
+    private readonly string _configDir;
     private readonly string _presetsFilePath;
     private readonly string _statsFilePath;
 
     public PresetManager(string? customPath = null)
     {
-        string dir = customPath ?? AppPaths.ConfigDir;
-        Directory.CreateDirectory(dir);
-        _presetsFilePath = Path.Combine(dir, "presets.json");
-        _statsFilePath = Path.Combine(dir, "presets_stats.json");
+        _configDir = customPath ?? AppPaths.ConfigDir;
+        Directory.CreateDirectory(_configDir);
+        _presetsFilePath = Path.Combine(_configDir, "presets.json");
+        _statsFilePath = Path.Combine(_configDir, "presets_stats.json");
     }
 
-    public List<Preset> GetDefaultPresets() => StrategyCatalog.GetDefaults();
+    public List<Preset> GetDefaultPresets()
+    {
+        var presets = StrategyCatalog.GetDefaults();
+
+        // Если стратегии Flowseal уже скачаны — они заменяют одноимённые встроенные.
+        var flowseal = FlowsealStrategyUpdater.LoadSavedPresets(_configDir);
+        if (flowseal.Count > 0)
+        {
+            var legacy = StrategyCatalog.FlowsealLegacyIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            presets.RemoveAll(p => legacy.Contains(p.Id));
+            presets.AddRange(flowseal);
+        }
+
+        return presets;
+    }
 
     public async Task<List<Preset>> LoadPresetsAsync()
     {
@@ -39,9 +54,6 @@ public class PresetManager
                 presets = GetDefaultPresets();
             }
         }
-
-        // Статистику загружаем до сохранения, чтобы не затереть её нулями.
-        await LoadStatsAsync(presets);
 
         // Обновляем встроенные стратегии до актуальных версий и добавляем новые.
         var builtIn = GetDefaultPresets();
@@ -73,6 +85,10 @@ public class PresetManager
                 changed = true;
             }
         }
+
+        // Статистику загружаем после синхронизации, чтобы не затереть её нулями
+        // и не потерять данные стратегий, пришедших из Flowseal.
+        await LoadStatsAsync(presets);
 
         if (changed)
         {

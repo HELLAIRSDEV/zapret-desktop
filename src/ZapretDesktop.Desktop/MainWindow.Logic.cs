@@ -32,17 +32,19 @@ public partial class MainWindow : FluentWindow
         MainTabs.SelectionChanged += OnMainTabsSelectionChanged;
         DomainInput.KeyDown += OnDomainInputKeyDown;
 
-        CreateTrayIcon();
-
         Loaded += OnLoaded;
         StateChanged += OnWindowStateChanged;
     }
 
     /// <summary>
-    /// При первом открытии вкладки Telegram автоматически подбираем прокси.
+    /// При первом открытии вкладки Telegram автоматически подбираем прокси,
+    /// а содержимое вкладки «Списки» грузим лениво — это ускоряет старт.
     /// </summary>
     private void OnMainTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (ReferenceEquals(MainTabs.SelectedItem, ListsTab))
+            _ = _viewModel.EnsureListContentLoadedAsync();
+
         if (_telegramAutoFetched || !ReferenceEquals(MainTabs.SelectedItem, TelegramTab)) return;
 
         _telegramAutoFetched = true;
@@ -66,11 +68,17 @@ public partial class MainWindow : FluentWindow
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // Значок в трее создаём после первого кадра — окно появляется быстрее.
+        CreateTrayIcon();
+
         await _viewModel.InitializeAsync();
         UpdateTrayText();
 
         if (_viewModel.StartMinimized)
             HideToTray();
+
+        // Проверка обновлений Flowseal идёт в фоне и не задерживает старт.
+        _ = _viewModel.CheckFlowsealUpdatesInBackgroundAsync();
     }
 
     // ================= Трей =================
@@ -216,6 +224,16 @@ public partial class MainWindow : FluentWindow
     {
         if (e.PropertyName is nameof(MainViewModel.IsRunning) or nameof(MainViewModel.StatusText))
             UpdateTrayText();
+
+        if (e.PropertyName == nameof(MainViewModel.IsFlowsealUpdateAvailable) &&
+            _viewModel.IsFlowsealUpdateAvailable &&
+            _trayIcon != null &&
+            !IsVisible)
+        {
+            _trayIcon.BalloonTipTitle = "Zapret Desktop";
+            _trayIcon.BalloonTipText = "Доступно обновление стратегий Flowseal. Откройте приложение, чтобы обновить.";
+            _trayIcon.ShowBalloonTip(4000);
+        }
     }
 
     private void OnWindowStateChanged(object? sender, EventArgs e)

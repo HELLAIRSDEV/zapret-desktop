@@ -18,6 +18,9 @@ public class AppSettings
     public int TelegramProxyPort { get; set; } = 443;
     public string TelegramProxySecret { get; set; } = string.Empty;
 
+    // Стратегии Flowseal
+    public bool CheckFlowsealUpdates { get; set; } = true;
+
     // Прочее
     public string LastPresetId { get; set; } = string.Empty;
     public string TestUrl { get; set; } = "https://discord.com";

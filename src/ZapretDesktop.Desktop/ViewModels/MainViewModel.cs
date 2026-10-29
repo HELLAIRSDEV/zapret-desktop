@@ -23,11 +23,14 @@ public partial class MainViewModel : ObservableObject
     private readonly ListManager _listManager;
     private readonly AutoStrategyTester _autoTester;
     private readonly SettingsManager _settingsManager;
+    private readonly FlowsealStrategyUpdater _flowsealUpdater;
     private readonly MtProtoProxyProvider _proxyProvider = new();
     private readonly StringBuilder _log = new();
 
     private CancellationTokenSource? _testCts;
+    private FlowsealUpdateInfo? _pendingFlowsealUpdate;
     private bool _initialized;
+    private bool _listContentLoaded;
 
     // ---------- Состояние ----------
     [ObservableProperty] private bool _isRunning;
@@ -75,6 +78,14 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _enableLogging;
     [ObservableProperty] private bool _gameFilter;
     [ObservableProperty] private bool _autoStartZapret;
+    [ObservableProperty] private bool _checkFlowsealUpdates = true;
+
+    // ---------- Обновления Flowseal ----------
+    [ObservableProperty] private bool _isFlowsealUpdateAvailable;
+    [ObservableProperty] private bool _isUpdatingFlowseal;
+    [ObservableProperty] private bool _isCheckingFlowseal;
+    [ObservableProperty] private string _flowsealUpdateText = string.Empty;
+    [ObservableProperty] private string _flowsealStatus = "Проверка обновлений ещё не выполнялась.";
 
     public MainViewModel()
     {
@@ -83,6 +94,7 @@ public partial class MainViewModel : ObservableObject
         _presetManager = new PresetManager();
         _listManager = new ListManager();
         _autoTester = new AutoStrategyTester(_engine);
+        _flowsealUpdater = new FlowsealStrategyUpdater();
 
         var settings = _settingsManager.Load();
 
@@ -93,6 +105,7 @@ public partial class MainViewModel : ObservableObject
         _enableLogging = settings.EnableLogging;
         _gameFilter = settings.GameFilter;
         _autoStartZapret = settings.AutoStartZapret;
+        _checkFlowsealUpdates = settings.CheckFlowsealUpdates;
         _telegramProxyHost = settings.TelegramProxyHost;
         _telegramProxyPort = settings.TelegramProxyPort.ToString();
         _telegramProxySecret = settings.TelegramProxySecret;
@@ -135,7 +148,6 @@ public partial class MainViewModel : ObservableObject
 
         await ReloadPresetsAsync();
         await ReloadListFilesAsync();
-        await LoadSelectedListAsync();
 
         var lastId = _settingsManager.Settings.LastPresetId;
         if (!string.IsNullOrEmpty(lastId))
@@ -149,8 +161,6 @@ public partial class MainViewModel : ObservableObject
             AppendLog("Автозапуск обхода включён настройками.");
             await StartServiceAsync();
         }
-
-        MemoryTrimmer.Trim(force: true);
     }
 
     private static bool CheckIsAdmin()
@@ -574,6 +584,16 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task ReloadListAsync() => await LoadSelectedListAsync();
 
+    /// <summary>
+    /// Содержимое списка грузится лениво — только при первом открытии вкладки «Списки».
+    /// Это заметно ускоряет старт приложения.
+    /// </summary>
+    public async Task EnsureListContentLoadedAsync()
+    {
+        if (_listContentLoaded) return;
+        await LoadSelectedListAsync();
+    }
+
     [RelayCommand]
     private async Task AddDomainsAsync()
     {
@@ -605,6 +625,8 @@ public partial class MainViewModel : ObservableObject
     private async Task LoadSelectedListAsync()
     {
         if (string.IsNullOrWhiteSpace(SelectedListFile)) return;
+
+        _listContentLoaded = true;
 
         try
         {
@@ -685,6 +707,129 @@ public partial class MainViewModel : ObservableObject
 
         if (SelectedPreset == null || Presets.All(p => p.Id != SelectedPreset.Id))
             SelectedPreset = Presets.FirstOrDefault();
+    }
+
+    // ================= Обновления стратегий Flowseal =================
+
+    /// <summary>
+    /// Фоновая проверка обновлений Flowseal. Запускается после показа окна,
+    /// не блокирует старт и молча завершается при отсутствии сети.
+    /// </summary>
+    public async Task CheckFlowsealUpdatesInBackgroundAsync()
+    {
+        if (!CheckFlowsealUpdates) return;
+
+        // Даём окну отрисоваться и завершить основную инициализацию.
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        await CheckFlowsealUpdatesCoreAsync(manual: false);
+    }
+
+    [RelayCommand]
+    private async Task CheckFlowsealUpdatesAsync() => await CheckFlowsealUpdatesCoreAsync(manual: true);
+
+    private async Task CheckFlowsealUpdatesCoreAsync(bool manual)
+    {
+        if (IsCheckingFlowseal || IsUpdatingFlowseal) return;
+
+        IsCheckingFlowseal = true;
+        if (manual) FlowsealStatus = "Проверяем GitHub...";
+
+        try
+        {
+            var info = await _flowsealUpdater.CheckForUpdateAsync();
+            if (info == null)
+            {
+                if (manual)
+                    FlowsealStatus = "Обновлений нет — стратегии актуальны.";
+                else if (_flowsealUpdater.LastAppliedUtc is { } applied)
+                    FlowsealStatus = $"Стратегии актуальны (обновлены {applied:dd.MM.yyyy HH:mm}).";
+                return;
+            }
+
+            _pendingFlowsealUpdate = info;
+            FlowsealUpdateText = $"Коммит {info.ShortSha} от {info.CommitDate:dd.MM.yyyy}: {info.Message}";
+            IsFlowsealUpdateAvailable = true;
+            FlowsealStatus = $"Доступно обновление: {info.ShortSha}";
+            AppendLog($"Flowseal: доступно обновление стратегий ({info.ShortSha}).");
+        }
+        catch (Exception ex)
+        {
+            if (manual) FlowsealStatus = $"Не удалось проверить обновления: {ex.Message}";
+        }
+        finally
+        {
+            IsCheckingFlowseal = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ApplyFlowsealUpdateAsync()
+    {
+        var info = _pendingFlowsealUpdate;
+        if (info == null || IsUpdatingFlowseal) return;
+
+        IsUpdatingFlowseal = true;
+        FlowsealStatus = "Обновляем стратегии Flowseal...";
+
+        var selectedId = SelectedPreset?.Id;
+        var finished = false;
+
+        try
+        {
+            var progress = new Progress<string>(message =>
+            {
+                if (!finished) FlowsealStatus = message;
+            });
+
+            var presets = await _flowsealUpdater.ApplyUpdateAsync(info, progress);
+            finished = true;
+
+            IsFlowsealUpdateAvailable = false;
+            _pendingFlowsealUpdate = null;
+
+            await ReloadPresetsAsync();
+
+            if (selectedId != null)
+                SelectedPreset = Presets.FirstOrDefault(p => p.Id == selectedId) ?? SelectedPreset;
+
+            FlowsealStatus = $"Стратегии обновлены: {presets.Count} шт. ({info.ShortSha}).";
+            AppendLog($"Flowseal: загружено {presets.Count} стратегий из коммита {info.ShortSha}.");
+            StatusText = "Стратегии Flowseal обновлены";
+
+            // Если обход уже работает, перезапускаем его на новых аргументах.
+            if (IsRunning && SelectedPreset != null)
+            {
+                AppendLog("Перезапуск обхода для применения новых стратегий...");
+                await StopServiceAsync();
+                await StartServiceAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            finished = true;
+            FlowsealStatus = $"Не удалось обновить: {ex.Message}";
+            AppendLog($"[ERR] Flowseal: {ex.Message}");
+            MessageBox.Show(
+                $"Не удалось обновить стратегии Flowseal.\n\n{ex.Message}",
+                "Обновление стратегий", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            IsUpdatingFlowseal = false;
+        }
+    }
+
+    [RelayCommand]
+    private void SkipFlowsealUpdate()
+    {
+        if (_pendingFlowsealUpdate != null)
+            _flowsealUpdater.Dismiss(_pendingFlowsealUpdate);
+
+        _pendingFlowsealUpdate = null;
+        IsFlowsealUpdateAvailable = false;
+        FlowsealStatus = "Обновление пропущено. Напомним только после следующего коммита Flowseal.";
+        AppendLog("Flowseal: обновление пропущено пользователем.");
     }
 
     // ================= Обработчики событий =================
@@ -823,6 +968,12 @@ public partial class MainViewModel : ObservableObject
     partial void OnAutoStartZapretChanged(bool value)
     {
         _settingsManager.Settings.AutoStartZapret = value;
+        _settingsManager.Save();
+    }
+
+    partial void OnCheckFlowsealUpdatesChanged(bool value)
+    {
+        _settingsManager.Settings.CheckFlowsealUpdates = value;
         _settingsManager.Save();
     }
 
